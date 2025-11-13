@@ -21,7 +21,7 @@ export const CourseList: React.FC<CourseListProps> = ({ courses, isLoading, prog
     );
   }
 
-  if (courses.length === 0) {
+  if (courses?.length === 0) {
     return (
       <div className="text-center py-16 px-6 bg-gray-800/20 border border-dashed border-gray-700 rounded-xl">
         <BookOpenIcon className="mx-auto w-12 h-12 text-gray-600" />
@@ -33,7 +33,7 @@ export const CourseList: React.FC<CourseListProps> = ({ courses, isLoading, prog
 
   return (
     <div className="space-y-6">
-      {courses.map((course, index) => (
+      {courses?.map((course, index) => (
         <CourseCard 
           key={index} 
           course={course}

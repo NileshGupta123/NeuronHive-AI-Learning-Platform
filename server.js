@@ -1,110 +1,79 @@
-// server.js — Backend proxy for Gemini
 import express from "express";
-import cors from "cors";
+import bodyParser from "body-parser";
+import fetch from "node-fetch";
 import dotenv from "dotenv";
-import { GoogleGenAI, Type } from "@google/genai";
 
 dotenv.config();
+
 const app = express();
-app.use(cors());
-app.use(express.json());
-
 const PORT = 5000;
-const ai = new GoogleGenAI({ apiKey: process.env.VITE_API_KEY });
 
-const responseSchema = {
-    type: Type.ARRAY,
-    items: {
-      type: Type.OBJECT,
-      properties: {
-        title: {
-          type: Type.STRING,
-          description: 'The title of the suggested learning course.',
-        },
-        description: {
-          type: Type.STRING,
-          description: 'A brief, one-paragraph summary of what the user will learn in this course.',
-        },
-        keyTopics: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.STRING,
-          },
-          description: 'A list of key topics or modules covered in the course.',
-        },
-        difficulty: {
-          type: Type.STRING,
-          description: 'The estimated difficulty level, matching the user\'s current knowledge (e.g., Beginner, Intermediate, Advanced).',
-        },
-        platform: {
-          type: Type.STRING,
-          description: 'A suggested platform to find this course or similar content (e.g., Coursera, Udemy, freeCodeCamp, YouTube).',
-        }
-      },
-      required: ["title", "description", "keyTopics", "difficulty", "platform"],
-    },
-};
+app.use(bodyParser.json());
 
-app.post("/api/generate", async (req, res) => {
-  try {
-    const prompt = req.body.prompt;
-
-    const model = ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: responseSchema,
-        temperature: 0.7,
-        topP: 0.95,
-      },
-    });
-
-    const result = await model;
-    res.json({ text: result.text });
-  } catch (error) {
-    console.error("Server Error:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
+// API endpoint for generating courses
 app.post("/api/generate-courses", async (req, res) => {
   try {
-    const { learningGoal, currentKnowledge } = req.body;
+    const { topic, level } = req.body;
 
-    const prompt = `
-      You are an expert curriculum advisor and learning architect. Your goal is to create personalized learning paths for developers.
-      Based on the following user query, generate 3 unique and actionable learning course suggestions.
+    if (!topic || !level) {
+      return res.status(400).json({ error: "Missing 'topic' or 'level' in request body" });
+    }
 
-      User Query:
-      - Learning Goal: ${learningGoal}
-      - Current Knowledge Level: ${currentKnowledge}
+    console.log("📤 Sending request to Gemini API...");
 
-      For each course suggestion, provide a clear title, a compelling description, a list of key topics to study, a difficulty rating that matches the user's knowledge level, and a suggested platform where they could find such a course.
-      The suggestions should be highly relevant to the user's learning goal. Ensure the response is in the requested JSON format.
-    `;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: responseSchema,
-        temperature: 0.7,
-        topP: 0.95,
+    const geminiResponse = await fetch("https://gemini.api.endpoint", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.GEMINI_API_KEY}`,
       },
+      body: JSON.stringify({
+        prompt: `
+Please return a JSON array of courses for the following learning goal:
+Topic: ${topic}
+Level: ${level}
+
+Format the response like this:
+
+[
+  {
+    "title": "Course Title",
+    "keyTopics": ["Topic 1", "Topic 2", "Topic 3"]
+  }
+]
+
+Only return valid JSON.
+        `,
+      }),
     });
 
-    const jsonText = response.text.trim();
-    // Sanitize response in case the model wraps the JSON in markdown backticks
-    const sanitizedJsonText = jsonText.replace(/^```json/, '').replace(/```$/, '').trim();
-    const courses = JSON.parse(sanitizedJsonText);
+    const aiRaw = await geminiResponse.json();
 
-    res.json(courses);
-  } catch (error) {
-    console.error("Server Error:", error);
-    res.status(500).json({ error: error.message });
+    const aiText = aiRaw.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!aiText) {
+      throw new Error("No text returned from AI.");
+    }
+
+    let courses;
+    try {
+      courses = JSON.parse(aiText);
+    } catch (err) {
+      console.error("⚠️ Failed to parse AI response as JSON:", aiText);
+      return res.status(500).json({
+        error:
+          "Failed to parse AI response. Make sure the prompt asks for valid JSON.",
+        rawResponse: aiText,
+      });
+    }
+
+    res.json({ courses });
+  } catch (err) {
+    console.error("💥 Error in /api/generate-courses:", err);
+    res.status(500).json({ error: "Error generating courses" });
   }
 });
 
-app.listen(PORT, () => console.log(`✅ Server running on http://localhost:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+});

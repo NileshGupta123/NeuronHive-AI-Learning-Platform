@@ -27,3 +27,6 @@ dist-ssr
 # Environment variables (secret keys)
 .env
 
+# Service account key (sensitive)
+serviceAccountKey.json
+

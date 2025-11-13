@@ -27,17 +27,19 @@ export const HomePage: React.FC<HomePageProps> = ({ onLogout }) => {
     setCourseProgress({});
 
     try {
-      const courses = await generateCourseSuggestions(learningQuery);
+      const courses: Course[] = await generateCourseSuggestions(learningQuery);
       setSuggestedCourses(courses);
-      const initialProgress = courses.reduce((acc, course) => {
+
+      const initialProgress: Record<string, boolean[]> = courses.reduce((acc, course) => {
         acc[course.title] = course.keyTopics.map(() => false);
         return acc;
       }, {} as Record<string, boolean[]>);
+
       setCourseProgress(initialProgress);
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
       console.error(errorMessage);
-      setError(`Failed to generate course suggestions. Please check your API key and try again. Error: ${errorMessage}`);
+      setError(`Failed to generate course suggestions. Error: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }
@@ -46,6 +48,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onLogout }) => {
   const handleToggleTopic = useCallback((courseTitle: string, topicIndex: number) => {
     setCourseProgress(prevProgress => {
       const newProgress = { ...prevProgress };
+      if (!newProgress[courseTitle]) return newProgress;
       const courseTopics = [...newProgress[courseTitle]];
       courseTopics[topicIndex] = !courseTopics[topicIndex];
       newProgress[courseTitle] = courseTopics;

@@ -1,18 +1,29 @@
-
 import type { LearningQuery, Course } from '../types';
 
-export const generateCourseSuggestions = async (query: LearningQuery): Promise<Course[]> => {
-  const { learningGoal, currentKnowledge } = query;
-
+export async function generateCourseSuggestions(query: LearningQuery): Promise<Course[]> {
   try {
-    const response = await fetch('http://localhost:5000/api/generate-courses', {
+    const response = await fetch('/api/generate-courses', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        learningGoal,
-        currentKnowledge,
+        userPrompt: `
+Please return a JSON array of courses for the following learning goal:
+Learning goal: ${query.learningGoal}
+Current knowledge: ${query.currentKnowledge}
+
+Format the response like this:
+
+[
+  {
+    "title": "Course Title",
+    "keyTopics": ["Topic 1", "Topic 2", "Topic 3"]
+  },
+  ...
+]
+Only return valid JSON.
+        `,
       }),
     });
 
@@ -20,11 +31,13 @@ export const generateCourseSuggestions = async (query: LearningQuery): Promise<C
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    const courses: Course[] = await response.json();
-    return courses;
+    // Parse JSON from the API response
+    const data = await response.json();
+
+    // Make sure we always return an array
+    return Array.isArray(data.courses) ? data.courses : [];
   } catch (error) {
-    console.error("Error calling backend API:", error);
-    const message = error instanceof Error ? error.message : "An unknown error occurred.";
-    throw new Error(`Failed to communicate with the backend. ${message}`);
+    console.error('Error generating course suggestions:', error);
+    throw error;
   }
-};
+}
